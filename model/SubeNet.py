@@ -234,14 +234,6 @@ class SubeNet(nn.Module):
         return seg_output, cline_output, feature_map, ds_3, ds_2, ds_1
 
 
-# class SubeNet(nn.Module):
-#
-#     def __init__(self, in_channels, out_channels):
-#         super(SubeNet, self).__init__()
-#
-#     def forward(self, x):
-#
-#         return 0
 if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     tensor = torch.randn([2, 1, 160, 160, 96]).to(device)
