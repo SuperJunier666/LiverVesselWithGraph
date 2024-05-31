@@ -55,21 +55,21 @@ class nei_graphDataset(Dataset):
         label = label_itk.get_fdata()
         centerline = center_itk.get_fdata()
 
-        z_size = image.shape[2]
-        padding_z = (16 - z_size % 16) % 16
-        image = np.pad(image, ((padding_z // 2, padding_z - padding_z // 2), (0, 0), (0, 0)), 'constant')
-        label = np.pad(label, ((padding_z // 2, padding_z - padding_z // 2), (0, 0), (0, 0)), 'constant')
-        centerline = np.pad(centerline, ((padding_z // 2, padding_z - padding_z // 2), (0, 0), (0, 0)), 'constant')
-        y_size = image.shape[1]
-        padding_y = (16 - y_size % 16) % 16
-        image = np.pad(image, ((0, 0), (padding_y // 2, padding_y - padding_y // 2), (0, 0)), 'constant')
-        label = np.pad(label, ((0, 0), (padding_y // 2, padding_y - padding_y // 2), (0, 0)), 'constant')
-        centerline = np.pad(centerline, ((0, 0), (padding_y // 2, padding_y - padding_y // 2), (0, 0)), 'constant')
-        x_size = image.shape[0]
-        padding_x = (16 - x_size % 16) % 16
-        image = np.pad(image, ((0, 0), (0, 0), (padding_x // 2, padding_x - padding_x // 2)), 'constant')
-        label = np.pad(label, ((0, 0), (0, 0), (padding_x // 2, padding_x - padding_x // 2)), 'constant')
-        centerline = np.pad(centerline, ((0, 0), (0, 0), (padding_x // 2, padding_x - padding_x // 2)), 'constant')
+        # z_size = image.shape[2]
+        # padding_z = (16 - z_size % 16) % 16
+        # image = np.pad(image, ((padding_z // 2, padding_z - padding_z // 2), (0, 0), (0, 0)), 'constant')
+        # label = np.pad(label, ((padding_z // 2, padding_z - padding_z // 2), (0, 0), (0, 0)), 'constant')
+        # centerline = np.pad(centerline, ((padding_z // 2, padding_z - padding_z // 2), (0, 0), (0, 0)), 'constant')
+        # y_size = image.shape[1]
+        # padding_y = (16 - y_size % 16) % 16
+        # image = np.pad(image, ((0, 0), (padding_y // 2, padding_y - padding_y // 2), (0, 0)), 'constant')
+        # label = np.pad(label, ((0, 0), (padding_y // 2, padding_y - padding_y // 2), (0, 0)), 'constant')
+        # centerline = np.pad(centerline, ((0, 0), (padding_y // 2, padding_y - padding_y // 2), (0, 0)), 'constant')
+        # x_size = image.shape[0]
+        # padding_x = (16 - x_size % 16) % 16
+        # image = np.pad(image, ((0, 0), (0, 0), (padding_x // 2, padding_x - padding_x // 2)), 'constant')
+        # label = np.pad(label, ((0, 0), (0, 0), (padding_x // 2, padding_x - padding_x // 2)), 'constant')
+        # centerline = np.pad(centerline, ((0, 0), (0, 0), (padding_x // 2, padding_x - padding_x // 2)), 'constant')
 
         if self.stage == 'train':
             if random.randint(0, 1):
@@ -79,31 +79,41 @@ class nei_graphDataset(Dataset):
             if random.random() > 0.5:
                 intensity_factor = random.uniform(0.9, 1.1)
                 image *= intensity_factor
+        image = (image - image.min()) / (image.max() - image.min()) * 255.
+        # print(image.max(),image.min())
+        image = image[np.newaxis]  # CDHW
+        label = label[np.newaxis]  # CDHW
+        centerline = centerline[np.newaxis]  # CDHW
 
-        image = image[np.newaxis, :, :, :].astype(np.float32)
-        label = (label > 0)[np.newaxis, :, :, :].astype(np.float32)
-        centerline = (centerline > 0)[np.newaxis, :, :, :].astype(np.float32)
+        image = np.ascontiguousarray(image)
+        label = np.ascontiguousarray(label)
+        centerline = np.ascontiguousarray(centerline)
 
         image = torch.from_numpy(image / 255.).float()
         label = torch.from_numpy(label / 1.0).float()
         centerline = torch.from_numpy(centerline / 1.0).float()
 
+        # print(type(image),type(label),type(centerline))
+
         graph = nx.read_gpickle(self.graph_paths[index])
         pos = []
         node_list = torch.tensor(list(graph.nodes))
         graph_label = torch.tensor([graph.nodes[i]['node_label'] for i in range(len(node_list))], dtype=torch.long)
-        # graph_label = np.array(graph_label).astype(np.float32)
+        # graph_label = np.array(graph_label).astype(np.float)
         for nd in range(len(node_list)):
             pos.append([graph.nodes[nd]['x'], graph.nodes[nd]['y'], graph.nodes[nd]['z']])
         pos = torch.tensor(pos)
         edge_index = torch.tensor(list(graph.edges), dtype=torch.long).permute(1,0)
         # edge_index = np.array(edge_index).astype(int)
 
-        adj = nx.adjacency_matrix(graph).astype(np.float32).todense()
-        adj =  torch.tensor(adj,dtype=torch.float32)
+        adj = nx.adjacency_matrix(graph).astype(float).todense()
+        adj =  torch.tensor(adj,dtype=torch.float)
 
         data = Data(x=node_list,edge_index=edge_index, y=graph_label,pos=pos,Adjacency_matrix=adj)
-
+        # assert torch.isfinite(image).all(), "image包含 NaN 或无穷大值"
+        # assert torch.isfinite(label).all(), "label包含 NaN 或无穷大值"
+        # assert torch.isfinite(centerline).all(), "centerline包含 NaN 或无穷大值"
+        # assert torch.isfinite(data.pos).all(), "pos包含 NaN 或无穷大值"
         return image, label, centerline,data
 
     def __len__(self):
@@ -113,21 +123,25 @@ class nei_graphDataset(Dataset):
 
 if __name__ == '__main__':
     if __name__ == '__main__':
-        img_dir  = '/media/Data/yanxc/Liver_vessel/pre_data/'
-        graph_dir = '/media/Data/yanxc/Liver_vessel/pre_data/'
+        img_dir  = '/media/Data/yanxc/Liver_vessel/pre_data1/'
+        graph_dir = '/media/Data/yanxc/Liver_vessel/pre_data1/'
 
         # img_dir = '../graph_data/data_train_val/code_test_data/img/'
         # graph_dir = '../graph_data/data_train_val/code_test_data/graph/'
 
         dataset = nei_graphDataset(img_dir,graph_dir, stage='train')
         # dataloader = torch.utils.data.DataLoader(dataset, batch_size=8, shuffle=False,num_workers=0,collate_fn=collate_fn)
-        dataloader = torch_geometric.loader.DataLoader(dataset, batch_size=2 ,shuffle=False,num_workers=0)
+        dataloader = torch_geometric.loader.DataLoader(dataset, batch_size=2 ,shuffle=False,num_workers=4)
         # image, label = next(iter(dataloader))
-        print(len(dataset))
+        # print(len(dataset))
         for iteration, data in enumerate(dataloader):
             image, label, centerline,batch = data
-            print(batch.x.shape)
-            print(batch.pos.shape)
+            print("输入的统计信息: min={}, max={}, mean={}, std={}".format(image.min().item(), image.max().item(),image.mean().item(), image.std().item()))
+            # print("输入的统计信息: min={}, max={}".format(label.min().item(), label.max().item(),))
+            # print("输入的统计信息: min={}, max={}".format(centerline.min().item(), centerline.max().item(), ))
+            print(np.unique(label),np.unique(centerline))
+            # print("节点特征的形状:",batch.x.shape)
+            # print("节点位置的形状:",batch.pos.shape)
             # print(torch.unique(batch.batch))
             # print(batch.y.shape)
             # print(batch.adj.shape)

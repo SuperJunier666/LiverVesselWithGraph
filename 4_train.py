@@ -25,43 +25,43 @@ class MixLoss(nn.Module):
     def forward(self, loss1, loss2,loss3):
     #     weights = F.softmax(self.weights, dim=0)
         # print('Weight:{:.3f},{:.3f}  '.format(alpha.cpu().detach().numpy(),belt.cpu().detach().numpy()) ,end='')
-        a = loss1/(loss1+loss2+loss3)
-        b = loss2/(loss1+loss2+loss3)
-        c = loss3/(loss1+loss2+loss3)
+        a = (loss1+1e-4)/(loss1+loss2+loss3)
+        b = (loss2+1e-4)/(loss1+loss2+loss3)
+        c = (loss3+1e-4)/(loss1+loss2+loss3)
+        # print('Weight:{:.3f},{:.3f},{:.3f} '.format(a.cpu().detach().numpy(),b.cpu().detach().numpy(),c.cpu().detach().numpy()),end='')
         loss =  a * loss1 + b * loss2 + c * loss3
+        # loss = 0.5 * loss1 + 0.5* loss2
         return loss
 
-def trans_cnn_feature(feature_map, node_positions,):
+def trans_cnn_feature(feature_map, node_positions,device):
     import numpy as np
-
-    print('node_positions',node_positions.shape)
+    # print('node_positions',node_positions.shape)
     batch_size, n_feat, x,y,z  = feature_map.shape
     total_nodes = node_positions.shape[0]
     num_nodes_per_batch = total_nodes // batch_size
-
     # 初始化新特征张量
-    new_feature = torch.zeros((total_nodes, n_feat), dtype=torch.float32)
+    new_feature = torch.zeros((total_nodes, n_feat), dtype=torch.float)
     # 计算每个节点对应的批次索引
     batch_indices = torch.arange(total_nodes) // num_nodes_per_batch
-    print(torch.unique(batch_indices))
+    # print(torch.unique(batch_indices))
     # 遍历每个节点，提取特征
     for node_index in range(total_nodes):
         batch_index = batch_indices[node_index]
         new_feature[node_index, :] = feature_map[batch_index, :, node_positions[node_index, 0], node_positions[node_index, 1], node_positions[node_index, 2]]
-    print(new_feature.shape)
-
-    return new_feature
+    # print(new_feature.shape)
+    return new_feature.to(device)
 
 def extract_neighborhood_features(feature_map, batch,device,neighborhood_size=2):
     from torch_geometric.data import Data
     batch_size, n_feat, _,_,_  = feature_map.shape
     padded_feat_map = torch.nn.functional.pad(feature_map, (neighborhood_size, neighborhood_size, neighborhood_size,
                                                             neighborhood_size, neighborhood_size, neighborhood_size),mode='constant', value=0)
+    # assert torch.isfinite(padded_feat_map).all(), "padded_feat_map包含 NaN 或无穷大值"
     total_nodes = batch.pos.shape[0]
     num_nodes_per_batch = total_nodes // batch_size
     neighborhood_dim = neighborhood_size * 2 + 1
     # 初始化新特征张量
-    new_feature = torch.zeros((total_nodes, n_feat * neighborhood_dim**3), dtype=torch.float32)
+    new_feature = torch.zeros((total_nodes, n_feat * neighborhood_dim**3), dtype=torch.float)
     # 计算每个节点对应的批次索引
     batch_indices = torch.arange(total_nodes) // num_nodes_per_batch
 
@@ -74,6 +74,7 @@ def extract_neighborhood_features(feature_map, batch,device,neighborhood_size=2)
                                                        z - neighborhood_size : z + neighborhood_size + 1]
         # print(neighborhood.shape)
         new_feature[node_index] = neighborhood.contiguous().view(-1)
+    # assert torch.isfinite(new_feature).all(), "new_feature包含 NaN 或无穷大值"
     # print(new_feature.shape,batch.edge_index.shape)
     # gdata = Data(x=new_feature, edge_index=batch.edge_index, batch=batch.batch)
     return new_feature.to(device)
@@ -85,9 +86,9 @@ if __name__ == '__main__':
     ############################
     # Parameters
     ############################
-    k = 0
-    NUM_EPOCHS = 100
-    LEARNINGRATE = 0.0001
+    k = 516
+    NUM_EPOCHS = 60
+    LEARNINGRATE = 1e-4
     NUM_CLASS = 2
     Batch_size = 2
 
@@ -95,17 +96,18 @@ if __name__ == '__main__':
     # load the net
     ###########################
     from torch_geometric.nn import GraphUNet
-    from model.MSEnet import MSENet
+    from model.SubeNet import SubeNet
     Architectures = ['']
     architecture = Architectures[-1]
-    inet1 = MSENet(in_channels=1, out_channels=2, base_filters_num=16)
-    inet2 = GraphUNet(in_channels=1000, hidden_channels=1024, out_channels=2,depth=4,pool_ratios=0.2)
+    inet1 = SubeNet(in_channels=1, out_channels=2, base_filters_num=16)
+    inet2 = GraphUNet(in_channels=432, hidden_channels=512, out_channels=2,depth=4)
+
     print('#Unet parameters:', sum(param.numel() for param in (inet1).parameters()))
     print('#GraphNet parameters:', sum(param.numel() for param in (inet2).parameters()))
 
     inet1 = inet1.to(device)
     inet2 = inet2.to(device)
-
+    # inet1.load_state_dict(torch.load('/media/Data/yanxc/Liver_vessel/graph_projtct/checkpoints/514/net_514_best_epoch_21.pth'))
     logpath = 'statistics/' + architecture + str(k) + '/'
     if not os.path.exists(logpath):
         os.makedirs(logpath)
@@ -115,15 +117,15 @@ if __name__ == '__main__':
     # load data
     ###########################
     #-----------------------K-fold  使用dataset--------------------
-    img_dir = '/media/Data/yanxc/Liver_vessel/pre_data/'
-    graph_dir = '/media/Data/yanxc/Liver_vessel/pre_data/'
+    img_dir = '/media/Data/yanxc/Liver_vessel/pre_data1/'
+    graph_dir = '/media/Data/yanxc/Liver_vessel/pre_data1/'
 
     Train_set = nei_graphDataset(img_dir,graph_dir,stage='train')
     Val_set = nei_graphDataset(img_dir,graph_dir, stage='val')
     train_size = int( Train_set.__len__())
-    print(train_size)
+    #print(train_size)
 
-    train_loader = torch_geometric.loader.DataLoader(dataset=Train_set, num_workers=4, batch_size=Batch_size, shuffle=True, pin_memory=True)
+    train_loader = torch_geometric.loader.DataLoader(dataset=Train_set, num_workers=4, batch_size=Batch_size, shuffle=True, pin_memory=True,drop_last=True)
     val_loader = torch_geometric.loader.DataLoader(dataset=Val_set, num_workers=4, batch_size=Batch_size, shuffle=True, pin_memory=True)
     mix_loss = MixLoss().to(device)
     ############################
@@ -131,9 +133,9 @@ if __name__ == '__main__':
     ###########################
     criterion1 = WCEDCELoss(num_classes=NUM_CLASS,intra_weights=torch.tensor([1., 3.]).to(device), device=device, inter_weights=0.5)
     criterion1_cl = WCEDCELoss(num_classes=NUM_CLASS, intra_weights=torch.tensor([1., 9.]).to(device),device=device, inter_weights=0.5)
-    criterion2 = torch.nn.CrossEntropyLoss().to(device)
+    criterion2 = torch.nn.CrossEntropyLoss()
 
-    optimizer1 = optim.Adam([{'params': inet1.parameters()},{'params': inet2.parameters()}], lr=LEARNINGRATE,weight_decay=0.0005)
+    optimizer1 = optim.Adam([{'params': inet1.parameters()},{'params': inet2.parameters()}], lr=LEARNINGRATE,  weight_decay=0.0005,eps=1e-4)
     scheduler1 = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer1,T_max=NUM_EPOCHS)
 
     ############################
@@ -145,7 +147,8 @@ if __name__ == '__main__':
     best_loss = np.inf
     best_epoch = 0
     since = time.time()
-
+    # TODO
+    # torch.autograd.set_detect_anomaly(True)
     for epoch in range(1, NUM_EPOCHS + 1):
         # adjust_lr(optimizer=optimizer, init_lr=LEARNINGRATE, epoch=epoch, decay_rate=0.1, decay_epoch=5)
         print('学习率:{} :'.format(optimizer1.state_dict()['param_groups'][0]['lr']))
@@ -157,13 +160,32 @@ if __name__ == '__main__':
 
             image = image.to(device)
             label = label.to(device)
+
             centerline = centerline.to(device)
             batch = batch.to(device)
-            pred_ves, pred_cl,feature_map,ds_3,ds_2,ds_1= inet1(image)
 
-            # feature_map = torch.rand(Batch_size, 8, 160, 160, 96)
-            out_fm = extract_neighborhood_features(feature_map, batch,device,neighborhood_size=2)
+            pred_ves, pred_cl,feature_map,ds_3,ds_2,ds_1= inet1(image)
+            # if not torch.isfinite(feature_map).all():
+            #     print("特征图在第 {} 次迭代中出现 NaN".format(iteration))
+            #     print("pred_ves:", pred_ves)
+            #     print("pred_cl:", pred_cl)
+            #     print("feature_map:", feature_map)
+            # assert torch.isfinite(pred_ves).all(), "pred包含 NaN 或无穷大值"
+            # assert torch.isfinite(pred_cl).all(), "cl包含 NaN 或无穷大值"
+            # assert torch.isfinite(feature_map).all(), "特征图包含 NaN 或无穷大值"
+
+            ## feature_map = torch.rand(Batch_size, 8, 160, 160, 96)
+            out_fm = extract_neighborhood_features(feature_map, batch,device,neighborhood_size=1)
+            # out_fm = trans_cnn_feature(feature_map, batch.pos,device)
+            # assert torch.isfinite(out_fm).all(), "特征图包含 NaN 或无穷大值"
+            # out_fm = torch.rand(3024, 1000).to(device)
+            # print(out_fm.shape)
             graph_output = inet2(x=out_fm, edge_index=batch.edge_index, batch=batch.batch)
+            # if not torch.isfinite(graph_output).all():
+            #     print("图输出在第 {} 次迭代中出现 NaN".format(iteration))
+            #     print("out_fm:", out_fm)
+            #     print("graph_output:", graph_output)
+            # assert torch.isfinite(graph_output).all(), "图输出包含 NaN 或无穷大值"
 
             loss1 = criterion1(pred_ves, label.squeeze(1).long())
             loss_ds1 = criterion1(ds_1, torch.from_numpy( zoom(label.squeeze(1).cpu().numpy(), zoom=[1., 1. / 2., 1. / 2., 1. / 2.], order=0,mode='nearest')).long().to(device))
@@ -175,7 +197,11 @@ if __name__ == '__main__':
             loss2 = criterion2(graph_output.unsqueeze(0).permute(0, 2, 1), batch.y.unsqueeze(0).long())
             loss = mix_loss(loss_deep,loss_cl,loss2)
             optimizer1.zero_grad()
+
+
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(inet1.parameters(), max_norm=1)
+            torch.nn.utils.clip_grad_norm_(inet2.parameters(), max_norm=1)
             optimizer1.step()
 
             ves_dice = dice_metric(pred_ves,label.squeeze(1).long())
@@ -191,10 +217,10 @@ if __name__ == '__main__':
                                   "Dice {:.2f}\t".format(epoch, NUM_EPOCHS, iteration,
                                                          len(train_loader),
                                                          loss.item(),
-                                                         loss_deep.item(),
+                                                         loss1.item(),
                                                          loss2.item(),
                                                          ves_dice.cpu().detach().numpy()))
-            epochresults['loss'].append(loss.item())
+            epochresults['loss'].append(loss1.item())
             epochresults['dice'].append(ves_dice.cpu().detach().numpy())
 
         results['loss'].append(np.mean(epochresults['loss']))
@@ -204,6 +230,7 @@ if __name__ == '__main__':
         # validate the net
         ############################
         inet1.eval()
+        inet2.eval()
         with torch.no_grad():
             for val_iteration, val_data in enumerate(val_loader):
                 val_image, val_label, val_centerline, val_batch = val_data
@@ -259,7 +286,7 @@ if __name__ == '__main__':
             torch.save(inet1.state_dict(), filepath + '/net_' + str(k) + '_save_epoch_%d.pth' % epoch)
             # torch.save(inet2.state_dict(), filepath + '/gat_' + str(k) + '_save_epoch_%d.pth' % epoch)
         scheduler1.step()
-
+        torch.cuda.empty_cache()
     time_elapsed = time.time() - since
     train_logger.info('Training complete in {:.0f}m {:.0f}s'.format(
         time_elapsed // 60, time_elapsed % 60))
