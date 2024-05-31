@@ -94,7 +94,7 @@ if __name__ == '__main__':
     Architectures = ['']
     architecture = Architectures[-1]
     inet1 = SubeNet(in_channels=1, out_channels=2, base_filters_num=16)
-    inet2 = GraphUNet(in_channels=432, hidden_channels=512, out_channels=2,depth=4)
+    inet2 = GraphUNet(in_channels=16, hidden_channels=256, out_channels=2,depth=4)
 
     print('#Unet parameters:', sum(param.numel() for param in (inet1).parameters()))
     print('#GraphNet parameters:', sum(param.numel() for param in (inet2).parameters()))
