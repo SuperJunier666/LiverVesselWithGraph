@@ -7,4 +7,4 @@
 
 数据集使用3Dircadb1
 
-subenet使用的checkpoint为 [SAM-Med3D-turbo](https://drive.google.com/file/d/1MuqYRQKIZb4YPtEraK8zTKKpp-dUQIR9/view?usp=sharing)
+SubeNet使用的checkpoint为 [SAM-Med3D-turbo](https://drive.google.com/file/d/1MuqYRQKIZb4YPtEraK8zTKKpp-dUQIR9/view?usp=sharing)
