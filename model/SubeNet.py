@@ -59,16 +59,9 @@ class ChannelAttention(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # avg_out = self.fc(self.avg_pool(x))
-        # max_out = self.fc(self.max_pool(x))
-        # assert torch.isfinite(x).all(), "输入包含 NaN 或无穷大值"
         avg_out = self.fc(self.avg_pool(x))
-        # assert torch.isfinite(avg_out).all(), "avg_out 包含 NaN 或无穷大值"
         max_out = self.fc(self.max_pool(x))
-        # assert torch.isfinite(max_out).all(), "max_out 包含 NaN 或无穷大值"
         output = self.sigmoid(avg_out + max_out)
-        # assert torch.isfinite(output).all(), "output 包含 NaN 或无穷大值"
-        # return self.sigmoid(avg_out + max_out)
         return output
 
 class SpatialAttention(nn.Module):
@@ -80,14 +73,10 @@ class SpatialAttention(nn.Module):
 
     def forward(self, x):
         avg_out = torch.mean(x, dim=1, keepdim=True)
-        # assert torch.isfinite(avg_out).all(), "avg_out包含 NaN 或无穷大值"
         max_out, _ = torch.max(x, dim=1, keepdim=True)
-        # assert torch.isfinite(max_out).all(), "max_out包含 NaN 或无穷大值"
         x = torch.cat([avg_out, max_out], dim=1)
         x = self.conv1(x)
-        # assert torch.isfinite(x).all(), "x包含 NaN 或无穷大值"
         output = self.sigmoid(x)
-        # assert torch.isfinite(output).all(), "output包含 NaN 或无穷大值"
         return output
 
 class MultiScaleFeatureFusionConvBlock3d(nn.Module):
@@ -109,29 +98,23 @@ class MultiScaleFeatureFusionConvBlock3d(nn.Module):
 
     def forward(self, x):
         # Res block
-        # assert torch.isfinite(x).all(), "x包含 NaN 或无穷大值"
         f = self.conv1_in(x)
-        # assert torch.isfinite(f).all(), "f包含 NaN 或无穷大值"
         # Channel Attention
         f = self.channel_attention(f) * f
-        # assert torch.isfinite(f).all(), "fca包含 NaN 或无穷大值"
         # MSFF block
         f_1 = f[:, 0: self.out_channels_split, :, :, :]
         f_2 = self.conv3_addition_2(f[:, self.out_channels_split: 2 * self.out_channels_split, :, :, :])
         f_3 = self.conv3_addition_3(f[:, 2 * self.out_channels_split: 3 * self.out_channels_split, :, :, :] + f_2)
         f_4 = self.conv3_addition_4(f[:, 3 * self.out_channels_split: 4 * self.out_channels_split, :, :, :] + f_3)
         fusion = f_1 + f_2 + f_3 + f_4
-        # assert torch.isfinite(fusion).all(), "fusion包含 NaN 或无穷大值"
         # Spatial Attention
         fusion = self.spatial_attention(fusion) * fusion
-        # assert torch.isfinite(fusion).all(), "fsa包含 NaN 或无穷大值"
         f_1 = f_1 + fusion
         f_2 = f_2 + fusion
         f_3 = f_3 + fusion
         f_4 = f_4 + fusion
 
         fm = torch.cat((f_1, f_2, f_3, f_4), dim=1)
-        # assert torch.isfinite(fusion).all(), "fm包含 NaN 或无穷大值"
         return self.conv1_out(fm)
 
 class EdgeAttentionModule(nn.Module):
@@ -211,11 +194,8 @@ class SubeNet(nn.Module):
 
     def forward(self, x):
 
-        # print("输入的统计信息: min={}, max={}, mean={}, std={}".format(x.min().item(), x.max().item(), x.mean().item(),x.std().item()))
-        # assert torch.isfinite(x).all(), "x包含 NaN 或无穷大值"
+
         down_0 = self.down_0(x)
-        # print("输入的down_0统计信息: min={}, max={}, mean={}, std={}".format(down_0.min().item(), down_0.max().item(), down_0.mean().item(), down_0.std().item()))
-        # assert torch.isfinite(down_0).all(), "down_0包含 NaN 或无穷大值"
         pool_0 = self.pool_0(down_0)
         down_1 = self.down_1(pool_0)
         pool_1 = self.pool_1(down_1)
@@ -227,19 +207,14 @@ class SubeNet(nn.Module):
         pool_4 = self.pool_4(down_4)
 
         bottleneck = self.bottleneck(pool_4)
-        # assert torch.isfinite(bottleneck).all(), "bottleneck包含 NaN 或无穷大值"
 
         sam_input = x
         sam_input = F.interpolate(sam_input, size=(128, 128, 128), mode='trilinear', align_corners=True)
         sam_embed = self.sam_image_encoder(sam_input)
-        # assert torch.isfinite(sam_embed).all(), "sam_embed1包含 NaN 或无穷大值"
-        # print(sam_embed.shape)
         trans_4 = self.trans_4(bottleneck)
 
         up_4_1 = self.up_4(torch.cat((trans_4, down_4), dim=1))
-        # assert torch.isfinite(up_4_1).all(), "up_4_1包含 NaN 或无穷大值"
         sam_embed = F.interpolate(sam_embed, size=(up_4_1.shape[2], up_4_1.shape[3], up_4_1.shape[4]),mode='trilinear', align_corners=True)
-        # assert torch.isfinite(sam_embed).all(), "sam_embed2包含 NaN 或无穷大值"
         up_4_2 = torch.cat((up_4_1, sam_embed), dim=1)
         trans_3 = self.trans_3(up_4_2)
         up_3 = self.up_3(torch.cat((trans_3, down_3), dim=1))
@@ -262,14 +237,6 @@ class SubeNet(nn.Module):
         return seg_output, cline_output, up_0, ds_3, ds_2, ds_1
 
 
-# class SubeNet(nn.Module):
-#
-#     def __init__(self, in_channels, out_channels):
-#         super(SubeNet, self).__init__()
-#
-#     def forward(self, x):
-#
-#         return 0
 if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     tensor = torch.randn([2, 1, 160, 160, 96]).to(device)
