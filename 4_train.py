@@ -101,7 +101,7 @@ if __name__ == '__main__':
 
     inet1 = inet1.to(device)
     inet2 = inet2.to(device)
-    # inet1.load_state_dict(torch.load('/media/Data/yanxc/Liver_vessel/graph_projtct/checkpoints/514/net_514_best_epoch_21.pth'))
+    # inet1.load_state_dict(torch.load('/checkpoints/514/net_514_best_epoch_21.pth'))
     logpath = 'statistics/' + architecture + str(k) + '/'
     if not os.path.exists(logpath):
         os.makedirs(logpath)
