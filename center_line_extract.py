@@ -58,21 +58,8 @@ def getarray(swcdata,shape):
                     array[x, y, z] = r
     return  array
 
-def AVseparate(data_path,name_):
-    img = nib.load(data_path)
-    data = img.get_fdata()
-    affine = img.affine
-    A_arr = np.zeros_like(data)
-    V_arr = np.zeros_like(data)
-    A_arr[data == 1] = 1
-    V_arr[data == 2] = 1
-    A = nib.Nifti1Image(A_arr, affine)
-    V = nib.Nifti1Image(V_arr, affine)
-    saved_A = nib.save(A, '../graph_data/new_AV_data_origin/A/' + name_ + '.nii.gz')
-    saved_V = nib.save(V, '../graph_data/new_AV_data_origin/V/' + name_ + '.nii.gz')
 
-
-label_dir = '../graph_data/new_AV_data_origin/label/'
+label_dir = '/media/DataA/LiverVessel/test_dataset/private/label'
 label_paths = [os.path.join(label_dir, x)
                     for x in os.listdir(label_dir)
                     if x.endswith('.nii.gz')]
@@ -80,24 +67,21 @@ label_paths.sort()
 print(label_paths)
 for idx in range(len(label_paths)):
     name = label_paths[idx].split('/')[-1].split('.')[0]
-    if '_' in name:
-        name = name.split('_')[0]
-    else:
-        name = name
-    #根据label得到动静脉分别的swc文件
-    rtrace('../../graph_data/new_AV_data_origin/V/' + name + '.nii.gz', '../../graph_data/new_AV_data_origin/center_line/' + name + '_V.txt')
+    print(name)
+    #根据label得到血管分别的swc文件
+    rtrace('/media/DataA/LiverVessel/test_dataset/private/label/' + name +'.nii.gz','/media/DataA/LiverVessel/test_dataset/private/CLine/' + name + '.txt' )
     #得到图像尺寸
     img = nib.load(label_paths[idx])
     data = img.get_fdata()
     affine = img.affine
+
     #swc转为矩阵
-    swcdata_v = loadswc('../graph_data/new_AV_data_origin/center_line/' + name + '_V.txt')
-    img_arr_v = getarray(swcdata_v, data.shape)
-    img_arr_v[img_arr_v != 0 ] = 1
-    #得到动静脉分离中心线矩阵
+    swcdata = loadswc('/media/DataA/LiverVessel/test_dataset/private/CLine/' + name + '.txt')
+    img_arr = getarray(swcdata,data.shape)
+    img_arr[img_arr > 1] = 1
     #保存
-    centerline = nib.Nifti1Image(centerline_arr,affine)
-    saved_img = nib.save(centerline,'../graph_data/new_AV_data_origin/center_line/' + name + '.nii.gz')
+    centerline = nib.Nifti1Image(img_arr,affine)
+    saved_img = nib.save(centerline,'/media/DataA/LiverVessel/test_dataset/private/CLine/' + name + '.nii.gz')
     print('*****************************************************{} finished'.format(name))
 
 
